@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>マーカーARテスト | ARデジタルフィギュア</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  #guide {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    background: rgba(0,0,0,.65); color: #fff; padding: 10px 16px; border-radius: 999px;
+    font-size: 14px; z-index: 10; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div id="guide">印刷したQRコードにカメラを向けてください</div>
+
+<a-scene
+  mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: yes; uiScanning: yes;"
+  color-space="sRGB"
+  renderer="colorManagement: true, physicallyCorrectLights"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false">
+
+  <a-assets>
+    <a-asset-item id="figure" src="./my_humanoid.glb"></a-asset-item>
+  </a-assets>
+
+  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+  <a-entity mindar-image-target="targetIndex: 0">
+    <!-- QRコード（1 x 1）の下端に足が乗るよう配置。高さはQR幅の約1.7倍 -->
+    <a-gltf-model src="#figure" position="-0.197 -0.5 0" rotation="0 0 0" scale="0.382 0.382 0.382"></a-gltf-model>
+  </a-entity>
+
+</a-scene>
+</body>
+</html>
