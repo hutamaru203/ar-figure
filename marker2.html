@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>マーカーARテスト2（見失っても残る版） | ARデジタルフィギュア</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  #guide {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    background: rgba(0,0,0,.65); color: #fff; padding: 10px 16px; border-radius: 999px;
+    font-size: 14px; z-index: 10; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div id="guide">印刷したQRコードにカメラを向けてください</div>
+
+<a-scene
+  mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: yes; uiScanning: yes; missTolerance: 30;"
+  color-space="sRGB"
+  renderer="colorManagement: true, physicallyCorrectLights"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false">
+
+  <a-assets>
+    <a-asset-item id="figure" src="./my_humanoid.glb"></a-asset-item>
+  </a-assets>
+
+  <a-camera id="cam" position="0 0 0" look-controls="enabled: false"></a-camera>
+
+  <a-entity id="target" mindar-image-target="targetIndex: 0">
+    <!-- QRコード（1 x 1）の下端に足が乗るよう配置。高さはQR幅の約1.7倍 -->
+    <a-gltf-model id="model" src="#figure" position="-0.197 -0.5 0" rotation="0 0 0" scale="0.382 0.382 0.382"></a-gltf-model>
+  </a-entity>
+
+</a-scene>
+
+<script>
+  // マーカーを見失ったら、モデルをカメラの子に付け替えて
+  // 「最後に見えていた姿勢のまま」画面に留める。再認識したら元の場所に戻す。
+  (function () {
+    var target = document.getElementById('target');
+    var model = document.getElementById('model');
+    var guide = document.getElementById('guide');
+    var scene = document.querySelector('a-scene');
+    var HOME_POS = [-0.197, -0.5, 0];
+    var HOME_SCALE = 0.382;
+    var held = false;
+
+    target.addEventListener('targetLost', function () {
+      if (held || !scene.camera) return;
+      held = true;
+      // カメラに付け替え（ワールド姿勢は維持される）
+      scene.camera.attach(model.object3D);
+      model.object3D.visible = true;
+      guide.textContent = '見失い中：最後の位置に表示しています（QRを映すと戻ります）';
+    });
+
+    target.addEventListener('targetFound', function () {
+      if (!held) { guide.textContent = '印刷したQRコードにカメラを向けてください'; return; }
+      held = false;
+      // マーカー側に戻し、ローカル配置を初期値にリセット
+      target.object3D.add(model.object3D);
+      model.object3D.position.set(HOME_POS[0], HOME_POS[1], HOME_POS[2]);
+      model.object3D.rotation.set(0, 0, 0);
+      model.object3D.scale.set(HOME_SCALE, HOME_SCALE, HOME_SCALE);
+      model.object3D.visible = true;
+      guide.textContent = '印刷したQRコードにカメラを向けてください';
+    });
+  })();
+</script>
+</body>
+</html>
