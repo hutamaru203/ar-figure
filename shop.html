@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>店舗ポスターARテスト | ARデジタルフィギュア</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  #guide {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    background: rgba(0,0,0,.65); color: #fff; padding: 10px 16px; border-radius: 999px;
+    font-size: 14px; z-index: 10; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div id="guide">ポスターにカメラを向けてください</div>
+
+<a-scene
+  mindar-image="imageTargetSrc: ./shop_targets.mind; autoStart: true; uiLoading: yes; uiScanning: yes; missTolerance: 30;"
+  color-space="sRGB"
+  renderer="colorManagement: true, physicallyCorrectLights"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false">
+
+  <a-assets>
+    <a-asset-item id="figure" src="./my_humanoid.glb"></a-asset-item>
+  </a-assets>
+
+  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+  <!-- 店内の明かり（シーン全体） -->
+  <a-light type="ambient" color="#ffe6c4" intensity="0.6"></a-light>
+  <a-light type="directional" color="#fff2dd" intensity="0.7" position="0.5 1 0.8"></a-light>
+
+  <a-entity mindar-image-target="targetIndex: 0">
+    <!-- オクルーダー＋店内ジオメトリ（下のスクリプトで構築） -->
+    <a-entity id="shopset" shop-interior></a-entity>
+
+    <!-- 店内の暖かい光 -->
+    <a-light type="point" color="#ffb36b" intensity="0.6" decay="1" position="0 0.45 -0.2"></a-light>
+
+    <!-- 店員：窓の内側、カウンターの後ろ。足は店内の床（y=-0.30）の高さ -->
+    <a-gltf-model id="clerk" src="#figure" position="-0.076 -0.3 -0.34" rotation="0 0 0" scale="0.135 0.135 0.135"></a-gltf-model>
+  </a-entity>
+
+</a-scene>
+
+<script>
+  // 店員モデルの全メッシュに renderOrder=2 を付け、オクルーダー（=1）より後に描く
+  document.getElementById('clerk').addEventListener('model-loaded', function (e) {
+    e.detail.model.traverse(function (o) { if (o.isMesh) o.renderOrder = 2; });
+  });
+
+  AFRAME.registerComponent('shop-interior', {
+    init: function () {
+      var root = this.el.object3D;
+
+      // ===== オクルーダー：ポスター平面（1 x 1.4145）に窓の穴だけ開いた見えない壁 =====
+      // 窓の穴はポスター画像の暗い開口部を実測して決めた（マーカー正規化座標、少し内側に寄せた値）
+      var H = 1.4145;
+      var shape = new THREE.Shape();
+      shape.moveTo(-0.5, -H / 2);
+      shape.lineTo(0.5, -H / 2);
+      shape.lineTo(0.5, H / 2);
+      shape.lineTo(-0.5, H / 2);
+      shape.closePath();
+      var hole = new THREE.Path();
+      hole.moveTo(-0.1605, -0.2806);
+      hole.lineTo(0.1468, -0.2806);
+      hole.lineTo(0.1468, 0.3323);
+      hole.lineTo(-0.1605, 0.3323);
+      hole.closePath();
+      shape.holes.push(hole);
+      var occ = new THREE.Mesh(
+        new THREE.ShapeGeometry(shape),
+        new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true })
+      );
+      occ.renderOrder = 1;
+      root.add(occ);
+
+      // ===== 店内（ポスター平面より奥、z は 0 〜 -0.55） =====
+      var FLOOR = -0.30;           // 店内の床の高さ（窓の下端付近）
+      var DEPTH = 0.55;            // 店の奥行き
+      var palette = [0xc0392b, 0xd4a017, 0x2e6f5e, 0x31597f, 0xb3541e, 0x7a3b5d, 0xe0e0e0, 0x8a3324];
+      var seed = 42;
+      function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+      function box(w, h, d, color, x, y, z) {
+        var m = new THREE.Mesh(
+          new THREE.BoxGeometry(w, h, d),
+          new THREE.MeshStandardMaterial({ color: color, roughness: 0.85, metalness: 0 })
+        );
+        m.position.set(x, y, z);
+        m.renderOrder = 2;
+        root.add(m);
+        return m;
+      }
+
+      // 床・背面・側壁・天井
+      box(1.04, 0.02, DEPTH + 0.02, 0x5d4028, 0, FLOOR - 0.01, -DEPTH / 2);          // 床
+      box(1.04, 1.02, 0.02, 0xe8d9b8, 0, FLOOR + 0.51, -DEPTH - 0.01);              // 背面（クリーム）
+      box(0.02, 1.02, DEPTH + 0.02, 0x8a5a33, -0.51, FLOOR + 0.51, -DEPTH / 2);     // 左壁
+      box(0.02, 1.02, DEPTH + 0.02, 0x8a5a33, 0.51, FLOOR + 0.51, -DEPTH / 2);      // 右壁
+      box(1.04, 0.02, DEPTH + 0.02, 0x6e4525, 0, 0.70, -DEPTH / 2);                 // 天井
+
+      // カウンター（天板 y=-0.10、窓の下端より少し上まで）
+      box(0.62, 0.175, 0.14, 0x6e4525, -0.007, -0.2125, -0.19);                     // 本体
+      box(0.66, 0.025, 0.18, 0x9c6b3f, -0.007, -0.1125, -0.19);                     // 天板
+      box(0.05, 0.05, 0.05, 0xc0392b, -0.14, -0.075, -0.16);                        // 天板の小物
+      box(0.04, 0.07, 0.04, 0xd4a017, 0.13, -0.065, -0.17);                         // 天板の小物
+
+      // 背面の棚：棚板2段＋色付きの薄い箱（本・商品）
+      [0.02, 0.30].forEach(function (shelfY) {
+        box(0.84, 0.02, 0.10, 0x8a5a33, 0, shelfY, -0.50);
+        var x = -0.40;
+        while (x < 0.38) {
+          var bw = 0.026 + rnd() * 0.016;
+          var bh = 0.09 + rnd() * 0.05;
+          var col = palette[Math.floor(rnd() * palette.length)];
+          box(bw, bh, 0.055, col, x + bw / 2, shelfY + 0.01 + bh / 2, -0.50);
+          x += bw + 0.004 + rnd() * 0.01;
+        }
+      });
+    }
+  });
+</script>
+</body>
+</html>
