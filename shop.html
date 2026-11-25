@@ -40,10 +40,10 @@
     <a-entity id="shopset" shop-interior></a-entity>
 
     <!-- 店内の暖かい光 -->
-    <a-light type="point" color="#ffb36b" intensity="0.6" decay="1" position="0 0.45 -0.2"></a-light>
+    <a-light type="point" color="#ffb36b" intensity="0.6" decay="1" position="0.02 0.35 -0.35"></a-light>
 
-    <!-- 店員：窓の内側、カウンターの後ろ。足は店内の床（y=-0.30）の高さ -->
-    <a-gltf-model id="clerk" src="#figure" position="-0.076 -0.3 -0.34" rotation="0 0 0" scale="0.135 0.135 0.135"></a-gltf-model>
+    <!-- 店員：窓の内側、カウンターの後ろ。全身が見える大きさ、足は店内の床（y=-0.535） -->
+    <a-gltf-model id="clerk" src="#figure" position="-0.09 -0.535 -0.52" rotation="0 0 0" scale="0.207 0.207 0.207"></a-gltf-model>
   </a-entity>
 
 </a-scene>
@@ -58,9 +58,15 @@
     init: function () {
       var root = this.el.object3D;
 
-      // ===== オクルーダー：ポスター平面（1 x 1.4145）に窓の穴だけ開いた見えない壁 =====
-      // 窓の穴はポスター画像の暗い開口部を実測して決めた（マーカー正規化座標、少し内側に寄せた値）
-      var H = 1.4145;
+      // ===== 窓（開口部）の実測値 =====
+      // ポスター画像（1140x1612）の暗部検出: left 0.1784 / right 0.8521 / top 0.0991 / bottom 0.8922（画像比率）
+      // マーカー正規化座標（幅1、高さ H=1612/1140=1.4140）へ変換し、穴は各辺 0.010 内側に寄せた
+      var H = 1612 / 1140;
+      var WIN = { x0: -0.3116, x1: 0.3421, y0: -0.5446, y1: 0.5569 };
+      var CX = (WIN.x0 + WIN.x1) / 2;   // 窓の中心 x = 0.0153
+      var WW = WIN.x1 - WIN.x0;         // 窓の幅 0.6537
+
+      // ===== オクルーダー：ポスター平面（1 x H）に窓の穴だけ開いた見えない壁 =====
       var shape = new THREE.Shape();
       shape.moveTo(-0.5, -H / 2);
       shape.lineTo(0.5, -H / 2);
@@ -68,10 +74,10 @@
       shape.lineTo(-0.5, H / 2);
       shape.closePath();
       var hole = new THREE.Path();
-      hole.moveTo(-0.1605, -0.2806);
-      hole.lineTo(0.1468, -0.2806);
-      hole.lineTo(0.1468, 0.3323);
-      hole.lineTo(-0.1605, 0.3323);
+      hole.moveTo(WIN.x0, WIN.y0);
+      hole.lineTo(WIN.x1, WIN.y0);
+      hole.lineTo(WIN.x1, WIN.y1);
+      hole.lineTo(WIN.x0, WIN.y1);
       hole.closePath();
       shape.holes.push(hole);
       var occ = new THREE.Mesh(
@@ -81,9 +87,9 @@
       occ.renderOrder = 1;
       root.add(occ);
 
-      // ===== 店内（ポスター平面より奥、z は 0 〜 -0.55） =====
-      var FLOOR = -0.30;           // 店内の床の高さ（窓の下端付近）
-      var DEPTH = 0.55;            // 店の奥行き
+      // ===== 店内（ポスター平面より奥、z は 0 〜 -0.85） =====
+      var FLOOR = WIN.y0 + 0.01;        // 店内の床の高さ（窓の下端付近）= -0.535
+      var DEPTH = 0.85;                 // 店の奥行き
       var palette = [0xc0392b, 0xd4a017, 0x2e6f5e, 0x31597f, 0xb3541e, 0x7a3b5d, 0xe0e0e0, 0x8a3324];
       var seed = 42;
       function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
@@ -97,30 +103,32 @@
         root.add(m);
         return m;
       }
+      var roomH = WIN.y1 - FLOOR + 0.04;         // 床から天井までの高さ
+      var roomCY = FLOOR + roomH / 2 - 0.02;
 
-      // 床・背面・側壁・天井
-      box(1.04, 0.02, DEPTH + 0.02, 0x5d4028, 0, FLOOR - 0.01, -DEPTH / 2);          // 床
-      box(1.04, 1.02, 0.02, 0xe8d9b8, 0, FLOOR + 0.51, -DEPTH - 0.01);              // 背面（クリーム）
-      box(0.02, 1.02, DEPTH + 0.02, 0x8a5a33, -0.51, FLOOR + 0.51, -DEPTH / 2);     // 左壁
-      box(0.02, 1.02, DEPTH + 0.02, 0x8a5a33, 0.51, FLOOR + 0.51, -DEPTH / 2);      // 右壁
-      box(1.04, 0.02, DEPTH + 0.02, 0x6e4525, 0, 0.70, -DEPTH / 2);                 // 天井
+      // 床・背面・側壁・天井（側壁と天井は窓の縁に合わせる）
+      box(WW + 0.06, 0.02, DEPTH + 0.02, 0x5d4028, CX, FLOOR - 0.01, -DEPTH / 2);              // 床
+      box(WW + 0.06, roomH, 0.02, 0xe8d9b8, CX, roomCY, -DEPTH - 0.01);                        // 背面（クリーム）
+      box(0.02, roomH, DEPTH + 0.02, 0x8a5a33, WIN.x0 - 0.01, roomCY, -DEPTH / 2);             // 左壁
+      box(0.02, roomH, DEPTH + 0.02, 0x8a5a33, WIN.x1 + 0.01, roomCY, -DEPTH / 2);             // 右壁
+      box(WW + 0.06, 0.02, DEPTH + 0.02, 0x6e4525, CX, WIN.y1 + 0.01, -DEPTH / 2);             // 天井
 
-      // カウンター（天板 y=-0.10、窓の下端より少し上まで）
-      box(0.62, 0.175, 0.14, 0x6e4525, -0.007, -0.2125, -0.19);                     // 本体
-      box(0.66, 0.025, 0.18, 0x9c6b3f, -0.007, -0.1125, -0.19);                     // 天板
-      box(0.05, 0.05, 0.05, 0xc0392b, -0.14, -0.075, -0.16);                        // 天板の小物
-      box(0.04, 0.07, 0.04, 0xd4a017, 0.13, -0.065, -0.17);                         // 天板の小物
+      // カウンター（天板 y=-0.10、店員の腰あたり。店員は z=-0.52 でその奥）
+      box(0.56, 0.42, 0.16, 0x6e4525, CX, FLOOR + 0.21, -0.30);                                // 本体
+      box(0.60, 0.03, 0.20, 0x9c6b3f, CX, -0.115, -0.30);                                      // 天板
+      box(0.07, 0.07, 0.07, 0xc0392b, CX - 0.17, -0.065, -0.27);                               // 天板の小物
+      box(0.05, 0.10, 0.05, 0xd4a017, CX + 0.18, -0.05, -0.28);                                // 天板の小物
 
       // 背面の棚：棚板2段＋色付きの薄い箱（本・商品）
-      [0.02, 0.30].forEach(function (shelfY) {
-        box(0.84, 0.02, 0.10, 0x8a5a33, 0, shelfY, -0.50);
-        var x = -0.40;
-        while (x < 0.38) {
-          var bw = 0.026 + rnd() * 0.016;
-          var bh = 0.09 + rnd() * 0.05;
+      [FLOOR + 0.58, FLOOR + 0.84].forEach(function (shelfY) {
+        box(WW - 0.04, 0.025, 0.12, 0x8a5a33, CX, shelfY, -DEPTH + 0.07);
+        var x = WIN.x0 + 0.03;
+        while (x < WIN.x1 - 0.06) {
+          var bw = 0.034 + rnd() * 0.022;
+          var bh = 0.13 + rnd() * 0.07;
           var col = palette[Math.floor(rnd() * palette.length)];
-          box(bw, bh, 0.055, col, x + bw / 2, shelfY + 0.01 + bh / 2, -0.50);
-          x += bw + 0.004 + rnd() * 0.01;
+          box(bw, bh, 0.07, col, x + bw / 2, shelfY + 0.0125 + bh / 2, -DEPTH + 0.07);
+          x += bw + 0.006 + rnd() * 0.014;
         }
       });
     }
