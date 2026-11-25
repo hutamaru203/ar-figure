@@ -13,10 +13,18 @@
     background: rgba(0,0,0,.65); color: #fff; padding: 10px 16px; border-radius: 999px;
     font-size: 14px; z-index: 10; white-space: nowrap;
   }
+  #fixbtn {
+    position: fixed; left: 50%; bottom: 66px; transform: translateX(-50%);
+    background: #1a73e8; color: #fff; border: none; border-radius: 999px;
+    padding: 10px 22px; font-size: 15px; font-weight: bold; z-index: 10;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3); cursor: pointer; display: none;
+  }
+  #fixbtn.frozen { background: #555; }
 </style>
 </head>
 <body>
 <div id="guide">ポスターにカメラを向けてください</div>
+<button id="fixbtn">📌 ここに固定する</button>
 
 <a-scene
   mindar-image="imageTargetSrc: ./shop_targets.mind; autoStart: true; uiLoading: yes; uiScanning: yes; missTolerance: 30;"
@@ -35,7 +43,11 @@
   <a-light type="ambient" color="#ffe6c4" intensity="0.6"></a-light>
   <a-light type="directional" color="#fff2dd" intensity="0.7" position="0.5 1 0.8"></a-light>
 
-  <a-entity mindar-image-target="targetIndex: 0">
+  <!-- マーカーの追跡専用アンカー（中身は持たない） -->
+  <a-entity id="anchor" mindar-image-target="targetIndex: 0"></a-entity>
+
+  <!-- 表示ステージ：アンカーの姿勢を平滑化して追従する。固定中は更新を止める -->
+  <a-entity id="stage" visible="false" pose-smoother="target: #anchor">
     <!-- オクルーダー＋店内ジオメトリ（下のスクリプトで構築） -->
     <a-entity id="shopset" shop-interior></a-entity>
 
@@ -52,6 +64,63 @@
   // 店員モデルの全メッシュに renderOrder=2 を付け、オクルーダー（=1）より後に描く
   document.getElementById('clerk').addEventListener('model-loaded', function (e) {
     e.detail.model.traverse(function (o) { if (o.isMesh) o.renderOrder = 2; });
+  });
+
+  // ===== 姿勢の平滑化＋固定 =====
+  // アンカー（生のトラッキング姿勢）のワールド姿勢を取り、
+  // ステージ側は指数平滑で追従させることでフレームごとの震えを吸収する。
+  // 固定中（frozen）は追従を止め、ステージは画面上のその位置に留まる。
+  AFRAME.registerComponent('pose-smoother', {
+    schema: { target: { type: 'selector' } },
+    init: function () {
+      this.tracking = false;
+      this.frozen = false;
+      this.snapped = false;
+      this._p = new THREE.Vector3();
+      this._q = new THREE.Quaternion();
+      this._s = new THREE.Vector3();
+      var self = this;
+      var anchor = this.data.target;
+      anchor.addEventListener('targetFound', function () {
+        self.tracking = true;
+        self.el.setAttribute('visible', true);
+        document.getElementById('fixbtn').style.display = 'block';
+      });
+      anchor.addEventListener('targetLost', function () {
+        self.tracking = false;
+      });
+    },
+    tick: function (t, dt) {
+      if (!this.tracking || this.frozen || !dt) return;
+      var a = this.data.target.object3D;
+      a.updateWorldMatrix(true, false);
+      a.matrixWorld.decompose(this._p, this._q, this._s);
+      var o = this.el.object3D;
+      if (!this.snapped) {
+        o.position.copy(this._p);
+        o.quaternion.copy(this._q);
+        o.scale.copy(this._s);
+        this.snapped = true;
+        return;
+      }
+      var k = 1 - Math.exp(-(dt / 1000) * 8);  // 平滑化の強さ（小さいほど滑らか・遅延大）
+      o.position.lerp(this._p, k);
+      o.quaternion.slerp(this._q, k);
+      o.scale.lerp(this._s, k);
+    }
+  });
+
+  // 固定ボタン
+  document.getElementById('fixbtn').addEventListener('click', function () {
+    var stage = document.getElementById('stage');
+    var comp = stage.components['pose-smoother'];
+    if (!comp) return;
+    comp.frozen = !comp.frozen;
+    this.textContent = comp.frozen ? '▶ 追従に戻す' : '📌 ここに固定する';
+    this.classList.toggle('frozen', comp.frozen);
+    document.getElementById('guide').textContent = comp.frozen
+      ? '固定中：スマホを動かしても表示は留まります'
+      : 'ポスターにカメラを向けてください';
   });
 
   AFRAME.registerComponent('shop-interior', {
